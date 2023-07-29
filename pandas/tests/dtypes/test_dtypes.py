@@ -2,10 +2,8 @@ import re
 
 import numpy as np
 import pyarrow as pa
-
 import pytest
 import pytz
-
 
 from pandas._libs.tslibs.dtypes import NpyDatetimeUnit
 
@@ -35,9 +33,14 @@ from pandas import (
     CategoricalIndex,
     DatetimeIndex,
     IntervalIndex,
+    NaT,
     Series,
     SparseDtype,
+    Timedelta,
+    Timestamp,
+    concat,
     date_range,
+    timedelta_range,
 )
 import pandas._testing as tm
 from pandas.core.arrays.sparse import SparseArray
@@ -569,7 +572,7 @@ class TestPeriodDtype(Base):
         assert not per_d2.freq.normalize
 
 
-class TestIntervalDtype(Base): 
+class TestIntervalDtype(Base):
     @pytest.fixture
     def dtype(self):
         """
@@ -1198,31 +1201,47 @@ def test_multi_column_dtype_assignment():
     tm.assert_frame_equal(df, expected)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_convert_dtypes_timestamp(unit):
-    series = pd.Series(pd.date_range("2020-01-01", "2020-01-02", freq="1min"))
+    series = Series(date_range("2020-01-01", "2020-01-02", freq="1min"))
     expected = series.astype(f"timestamp[{unit}][pyarrow]")
-    
+
     converted = expected.convert_dtypes(dtype_backend="pyarrow")
-    
-    pd.testing.assert_series_equal(expected, converted)
+
+    tm.assert_series_equal(expected, converted)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_convert_dtypes_duration(unit):
-    series = pd.Series(pd.timedelta_range("1s", "10s", freq="1s"))
+    series = Series(timedelta_range("1s", "10s", freq="1s"))
     expected = series.astype(f"duration[{unit}][pyarrow]")
-    
+
     converted = expected.convert_dtypes(dtype_backend="pyarrow")
-    
-    pd.testing.assert_series_equal(expected, converted)
+
+    tm.assert_series_equal(expected, converted)
 
 
 @pytest.mark.parametrize(
     "timestamp_unit, duration_unit",
     [
         ("s", "s"),
-        ("s", "ms"),    
+        ("s", "ms"),
         ("s", "us"),
         ("s", "ns"),
         ("ms", "s"),
@@ -1237,60 +1256,105 @@ def test_convert_dtypes_duration(unit):
         ("ns", "ms"),
         ("ns", "us"),
         ("ns", "ns"),
-    ])
+    ],
+)
 def test_convert_dtypes_timestamp_and_duration(timestamp_unit, duration_unit):
-    timestamp_series = pd.Series(pd.date_range("2020-01-01", "2020-01-02", freq="1min")).astype(f"timestamp[{timestamp_unit}][pyarrow]")
-    duration_series = pd.Series(pd.timedelta_range("1s", "10s", freq="1s")).astype(f"duration[{duration_unit}][pyarrow]")
+    timestamp_series = Series(
+        date_range("2020-01-01", "2020-01-02", freq="1min")
+    ).astype(f"timestamp[{timestamp_unit}][pyarrow]")
+    duration_series = Series(timedelta_range("1s", "10s", freq="1s")).astype(
+        f"duration[{duration_unit}][pyarrow]"
+    )
 
-    df = pd.concat([timestamp_series, duration_series], axis=1)
+    df = concat([timestamp_series, duration_series], axis=1)
     converted = df.convert_dtypes(dtype_backend="pyarrow")
 
-    pd.testing.assert_frame_equal(df, converted)
+    tm.assert_frame_equal(df, converted)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_convert_dtypes_datetime(unit):
-    series = pd.Series(pd.date_range("2020-01-01", "2020-01-02", freq="1min")).astype(f"datetime64[{unit}]")
-    
-    expected  = series.astype(f"timestamp[{unit}][pyarrow]")
+    series = Series(date_range("2020-01-01", "2020-01-02", freq="1min")).astype(
+        f"datetime64[{unit}]"
+    )
+
+    expected = series.astype(f"timestamp[{unit}][pyarrow]")
     converted = series.convert_dtypes(dtype_backend="pyarrow")
-    
-    pd.testing.assert_series_equal(expected, converted)
+
+    tm.assert_series_equal(expected, converted)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_convert_dtypes_timedelta(unit):
-    series = pd.Series(pd.timedelta_range("1s", "10s", freq="1s")).astype(f"timedelta64[{unit}]")
-    
-    expected  = series.astype(f"duration[{unit}][pyarrow]")
+    series = Series(timedelta_range("1s", "10s", freq="1s")).astype(
+        f"timedelta64[{unit}]"
+    )
+
+    expected = series.astype(f"duration[{unit}][pyarrow]")
     converted = series.convert_dtypes(dtype_backend="pyarrow")
-    
-    pd.testing.assert_series_equal(expected, converted)
+
+    tm.assert_series_equal(expected, converted)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_pa_table_to_pandas_datetime(unit):
-    df = pd.DataFrame(pd.date_range("2020-01-01", "2020-01-02", freq="1min")).astype(f"datetime64[{unit}]")
+    df = pd.DataFrame(date_range("2020-01-01", "2020-01-02", freq="1min")).astype(
+        f"datetime64[{unit}]"
+    )
     df_converted_to_pa = pa.table(df)
     df_back_to_pd = df_converted_to_pa.to_pandas()
-    
-    pd.testing.assert_frame_equal(df, df_back_to_pd)
+
+    tm.assert_frame_equal(df, df_back_to_pd)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_pa_table_to_pandas_timedelta(unit):
-    df = pd.DataFrame(pd.timedelta_range("1s", "10s", freq="1s")).astype(f"timedelta64[{unit}]")
+    df = pd.DataFrame(timedelta_range("1s", "10s", freq="1s")).astype(
+        f"timedelta64[{unit}]"
+    )
     df_converted_to_pa = pa.table(df)
     df_back_to_pd = df_converted_to_pa.to_pandas()
-    
-    pd.testing.assert_frame_equal(df, df_back_to_pd)
+
+    tm.assert_frame_equal(df, df_back_to_pd)
 
 
 @pytest.mark.parametrize(
     "datetime_unit, timedelta_unit",
     [
         ("s", "s"),
-        ("s", "ms"),    
+        ("s", "ms"),
         ("s", "us"),
         ("s", "ns"),
         ("ms", "s"),
@@ -1305,42 +1369,66 @@ def test_pa_table_to_pandas_timedelta(unit):
         ("ns", "ms"),
         ("ns", "us"),
         ("ns", "ns"),
-    ])
+    ],
+)
 def test_pa_table_and_to_pandas_datetime_and_timedelta(datetime_unit, timedelta_unit):
-    timestamp_series = pd.Series(pd.date_range("2020-01-01", "2020-01-02", freq="1min")).astype(f"datetime64[{datetime_unit}]")
-    duration_series = pd.Series(pd.timedelta_range("1s", "10s", freq="1s")).astype(f"timedelta64[{timedelta_unit}]")
+    timestamp_series = Series(
+        date_range("2020-01-01", "2020-01-02", freq="1min")
+    ).astype(f"datetime64[{datetime_unit}]")
+    duration_series = Series(timedelta_range("1s", "10s", freq="1s")).astype(
+        f"timedelta64[{timedelta_unit}]"
+    )
 
-    df = pd.concat([timestamp_series, duration_series], axis=1)
+    df = concat([timestamp_series, duration_series], axis=1)
     df_converted_to_pa = pa.table(df)
     df_back_to_pd = df_converted_to_pa.to_pandas()
-    
 
-    pd.testing.assert_frame_equal(df, df_back_to_pd)
+    tm.assert_frame_equal(df, df_back_to_pd)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_pa_table_to_pandas_timestamp(unit):
-    df = pd.DataFrame(pd.date_range("2020-01-01", "2020-01-02", freq="1min")).astype(f"timestamp[{unit}][pyarrow]")
+    df = pd.DataFrame(date_range("2020-01-01", "2020-01-02", freq="1min")).astype(
+        f"timestamp[{unit}][pyarrow]"
+    )
     df_converted_to_pa = pa.table(df)
     df_back_to_pd = df_converted_to_pa.to_pandas()
-    
-    pd.testing.assert_frame_equal(df, df_back_to_pd)
+
+    tm.assert_frame_equal(df, df_back_to_pd)
 
 
-@pytest.mark.parametrize("unit", ["s","ms","us","ns",])
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "s",
+        "ms",
+        "us",
+        "ns",
+    ],
+)
 def test_pa_table_to_pandas_duration(unit):
-    df = pd.DataFrame(pd.timedelta_range("1s", "10s", freq="1s")).astype(f"duration[{unit}][pyarrow]")
+    df = pd.DataFrame(timedelta_range("1s", "10s", freq="1s")).astype(
+        f"duration[{unit}][pyarrow]"
+    )
     df_converted_to_pa = pa.table(df)
     df_back_to_pd = df_converted_to_pa.to_pandas()
-    
-    pd.testing.assert_frame_equal(df, df_back_to_pd)
+
+    tm.assert_frame_equal(df, df_back_to_pd)
 
 
 @pytest.mark.parametrize(
     "timestamp_unit, duration_unit",
     [
         ("s", "s"),
-        ("s", "ms"),    
+        ("s", "ms"),
         ("s", "us"),
         ("s", "ns"),
         ("ms", "s"),
@@ -1355,28 +1443,31 @@ def test_pa_table_to_pandas_duration(unit):
         ("ns", "ms"),
         ("ns", "us"),
         ("ns", "ns"),
-    ])
+    ],
+)
 def test_pa_table_and_to_pandas_timestamp_and_duration(timestamp_unit, duration_unit):
-    timestamp_series = pd.Series(pd.date_range("2020-01-01", "2020-01-02", freq="1min")).astype(f"timestamp[{timestamp_unit}][pyarrow]")
-    duration_series = pd.Series(pd.timedelta_range("1s", "10s", freq="1s")).astype(f"duration[{duration_unit}][pyarrow]")
+    timestamp_series = Series(
+        date_range("2020-01-01", "2020-01-02", freq="1min")
+    ).astype(f"timestamp[{timestamp_unit}][pyarrow]")
+    duration_series = Series(timedelta_range("1s", "10s", freq="1s")).astype(
+        f"duration[{duration_unit}][pyarrow]"
+    )
 
-    df = pd.concat([timestamp_series, duration_series], axis=1)
+    df = concat([timestamp_series, duration_series], axis=1)
     df_converted_to_pa = pa.table(df)
     df_back_to_pd = df_converted_to_pa.to_pandas()
-    
 
-    pd.testing.assert_frame_equal(df, df_back_to_pd)
+    tm.assert_frame_equal(df, df_back_to_pd)
 
 
 def test_conversion_with_missing_values():
-    df = pd.DataFrame({
-
-        'timestamp_col': [pd.Timestamp('2020-01-01'), pd.NaT],
-        'duration_col': [pd.Timedelta('1s'), pd.NaT],
-    })
+    df = pd.DataFrame(
+        {
+            "timestamp_col": [Timestamp("2020-01-01"), NaT],
+            "duration_col": [Timedelta("1s"), NaT],
+        }
+    )
     df_coverted_to_pa = pa.table(df)
     df_back_to_pd = df_coverted_to_pa.to_pandas()
-    
-    pd.testing.assert_frame_equal(df, df_back_to_pd)
 
- 
+    tm.assert_frame_equal(df, df_back_to_pd)
